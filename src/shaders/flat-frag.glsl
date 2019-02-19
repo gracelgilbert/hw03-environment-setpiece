@@ -8,7 +8,8 @@ uniform float u_Time;
 in vec2 fs_Pos;
 out vec4 out_Col;
 
-const float epsilon = 0.001;
+const float epsilon = 0.01;
+const float pi = 3.1415926535;
 // Noise functions:
 float random1( vec2 p , vec2 seed) {
   return fract(sin(dot(p + seed, vec2(127.1, 311.7))) * 43758.5453);
@@ -93,10 +94,37 @@ float computeWorley(float x, float y, float numRows, float numCols) {
     // return 2.0;
 }
 
+float computeWorley3D(float x, float y, float z, float numRows, float numCols, float numZ) {
+    float xPos = x * float(numCols) / 20.f;
+    float yPos = y * float(numRows) / 20.f;
+    float zPos = z * float(numZ) / 20.f;
+
+
+    float minDist = 60.f;
+    vec3 minVec = vec3(0.f, 0.f, 0.f);
+
+    for (int i = -1; i < 2; i++) {
+        for (int j = -1; j < 2; j++) {
+            for (int k = -1; k < 2; k++) {
+              vec3 currGrid = vec3(floor(float(xPos)) + float(i), floor(float(yPos)) + float(j), floor(float(zPos)) + float(k));
+              vec3 currNoise = currGrid + vec3(random1(currGrid, vec3(2.0, 1.0, 3.0)), random1(currGrid, vec3(1.0, 2.0, 7.0)), random1(currGrid, vec3(5.0, 4.0, 8.0))); // GET 3D random
+              float currDist = distance(vec3(xPos, yPos, zPos), currNoise);
+              if (currDist <= minDist) {
+                  minDist = currDist;
+                  minVec = currNoise;
+              }
+            }
+
+        }
+    }
+    return minDist;
+    // return 2.0;
+}
+
 float fbm(float x, float y, float height, float xScale, float yScale) {
   float total = 0.f;
   float persistence = 0.5f;
-  int octaves = 2;
+  int octaves = 3;
   float freq = 2.0;
   float amp = 1.0;
   for (int i = 0; i < octaves; i++) {
@@ -111,7 +139,7 @@ float fbm(float x, float y, float height, float xScale, float yScale) {
 float fbm3D(float x, float y, float z, float height, float xScale, float yScale, float zScale) {
   float total = 0.f;
   float persistence = 0.5f;
-  int octaves = 2;
+  int octaves = 3;
   float freq = 2.0;
   float amp = 1.0;
   for (int i = 0; i < octaves; i++) {
@@ -202,19 +230,20 @@ float sdCappedCylinder( vec3 p, vec2 h )
   return min(max(d.x,d.y),0.0) + length(max(d,0.0));
 }
 
-float sdRoundBox( vec3 p, vec3 b, float r )
+// float sdRoundBox( vec3 p, vec3 b, float r )
+// {
+//   vec3 d = abs(p) - b;
+//   return length(max(d,0.0)) - r
+//          + min(max(d.x,max(d.y,d.z)),0.0); // remove this line for an only partially signed sdf 
+// }
+
+	float sdRoundBox( vec3 p, vec3 b, float r )
 {
   vec3 d = abs(p) - b;
-  return length(max(d,0.0)) - r
+  float val =  length(max(d,0.0))
          + min(max(d.x,max(d.y,d.z)),0.0); // remove this line for an only partially signed sdf 
+  return val - r;
 }
-
-
-
-
-
-
-
 
 
 vec3 castRay(vec3 eye) {
@@ -232,13 +261,14 @@ vec3 castRay(vec3 eye) {
 }
 
 float tableSDF(vec3 p) {
-  // return 10000.0;
+  // float zFreq = 0.9 + 0.08 * (sin(p.x / 5.0 + 2.0) + sin(p.x / 4.0 + 9.0) + cos(p.z / 3.0));
+  // float tVal = 1.0 - (1.0 * fbm(p.x, p.z, 1.0, 9.0, zFreq));
+
   vec3 tableTranslate = vec3(0.0, 1.2, 0.0);;
+  // p.y -= 0.05 * tVal;
+
   return sdBox(p + tableTranslate, vec3(20.0, 0.1, 10.0));
-  // return sdPlane(p, normalize(vec4(0.0, 1.0, 0.0, 1.0)));
-  // vec3 pScale = vec3(0.5, 4.0, 0.5);
-  // vec3 pTranslate = vec3(0.0, 0.0, 0.0);
-  // return sdRoundedCylinder(p * pScale + pTranslate, 1.0, 1.0, 1.0);
+
 }
 
 float saucerSDF(vec3 p) {
@@ -277,7 +307,7 @@ float cupSDF(vec3 p) {
   vec3 pTranslate = vec3(2.6, 0.45, 0.0);
   p += pTranslate;
   vec3 baseConeTransform = vec3(0.0, 0.1, 0.0);
-  float baseConeDist = sdCappedCone(p + baseConeTransform, 0.3, 1.2, 0.7);
+  float baseConeDist = sdCappedCone(p + baseConeTransform, 0.3, 1.5, 0.7);
 
   vec3 sphereScale = vec3(0.73, 1.05, 0.73);
   vec3 sphereTranslate = vec3(0.0, -0.8, 0.0); 
@@ -288,35 +318,183 @@ float cupSDF(vec3 p) {
   float subtractBoxDist = sdBox(p * subtractBoxScale + subtractBoxTranslate, vec3(1.0, 1.0, 1.0));
   baseSphereDist = opSubtraction(subtractBoxDist, baseSphereDist);
 
-  vec3 cupCylScale = vec3(0.4, 0.8, 0.4);
-  vec3 cupCylTranslate = vec3(0.0, -1.4, 0.0);
-  float cupCylDist = sdCappedCylinder(p * cupCylScale + cupCylTranslate, vec2(1.0, 1.0));
+  // vec3 cupCylScale = vec3(0.4, 0.8, 0.4);
+  vec3 cupConeScale = vec3(1.0, 1.0, 1.0);
+  vec3 cupConeTranslate = vec3(0.0, -1.8, 0.0);
 
-  vec3 torusTranslate = vec3(0.0, -1.0, 0.0);
-  vec3 torusScale = vec3(1.0, 0.74, 1.0);
-  float cutoutTorus = sdTorus(p * torusScale + torusTranslate, vec2(5.25, 3.5));
-  cupCylDist = opSmoothSubtraction(cutoutTorus, cupCylDist, 0.1);
+  // vec3 cupCylTranslate = vec3(0.0, -1.4, 0.0);
+  // float cupCylDist = sdCappedCylinder(p * cupCylScale + cupCylTranslate, vec2(1.0, 1.0));
+  float cupConeDist = sdCappedCone(p * cupConeScale + cupConeTranslate, 1.2, 1.8, 2.0);
 
-  vec3 cupCylSubtractScale = vec3(0.5, 0.89, 0.5);
-  vec3 cupCylSubtractTranslate = vec3(0.0, -1.7, 0.0);
-  float cupCylSubtractDist = sdCappedCylinder(p * cupCylSubtractScale + cupCylSubtractTranslate, vec2(1.0, 1.0));
+  vec3 torusTranslate = vec3(0.0, -1.2, 0.0);
+  vec3 torusScale = vec3(1.0, 0.8, 1.0);
+  float cutoutTorus = sdTorus(p * torusScale + torusTranslate, vec2(5.3, 3.5));
+  cupConeDist = opSmoothSubtraction(cutoutTorus, cupConeDist, 0.1);
+
+  vec3 cupConeSubtractScale = vec3(1.0, 1.0, 1.0);
+  vec3 cupConeSubtractTranslate = vec3(0.0, -1.8, 0.0);
+  // float cupCylSubtractDist = sdCappedCylinder(p * cupCylSubtractScale + cupCylSubtractTranslate, vec2(1.0, 1.0));
+  float cupConeSubtractDist = sdCappedCone(p * cupConeSubtractScale + cupConeSubtractTranslate, 1.3, 1.6, 1.8);
+
   
   vec3 torus2Translate = vec3(0.0, -1.0, 0.0);
   vec3 torus2Scale = vec3(1.0, 0.77, 1.0);
-  float cutout2Torus = sdTorus(p * torusScale + torusTranslate, vec2(5.2, 3.5));
-  cupCylSubtractDist = opSubtraction(cutout2Torus, cupCylSubtractDist);
+  float cutout2Torus = sdTorus(p * torusScale + torusTranslate, vec2(5.3, 3.5));
+  cupConeSubtractDist = opSubtraction(cutout2Torus, cupConeSubtractDist);
 
-  cupCylDist = opSubtraction(cupCylSubtractDist, cupCylDist);
-  return opSmoothUnion(opSmoothUnion(baseConeDist, baseSphereDist, 0.2), cupCylDist, 0.3);
+  cupConeDist = opSubtraction(cupConeSubtractDist, cupConeDist);
+  return opSmoothUnion(opSmoothUnion(baseConeDist, baseSphereDist, 0.2), cupConeDist, 0.3);
 }
 
-float sugarCubesSDF(vec3 p) {
-  vec3 cube1Translate = vec3(-2.0, 0.0, 4.0);
-  vec3 cube1Scale = vec3(1.0, 2.0, 2.0);
-  float cube1Dist = sdRoundBox(p * cube1Scale + cube1Translate, vec3(1.0, 1.0, 1.0), 2.0);
-  // return cube1Dist;
-  return 10.0;
+float sugarCubesFlatSDF(vec3 p) {
+  vec3 cube1Translate = vec3(-5.95, 0.7, -0.9);
+  vec3 cube1Scale = vec3(1.0, 1.0, 1.0);
 
+  float cube1Theta = pi / 8.0;
+  mat3 cube1Rotation   = mat3(vec3(cos(cube1Theta), 0, sin(cube1Theta)),
+                         vec3(0, 1, 0),
+                         vec3(-sin(cube1Theta), 0, cos(cube1Theta))
+                         );
+  float cube1Dist =  sdRoundBox((cube1Scale * p + cube1Translate) * cube1Rotation, vec3(0.6, 0.35, 0.38), 0.1);
+
+  vec3 cube2Translate = vec3(-4.4, 0.7, -0.3);
+  vec3 cube2Scale = vec3(1.0, 1.0, 1.0);
+
+  float cube2Theta = -pi / 7.0;
+  mat3 cube2Rotation   = mat3(vec3(cos(cube2Theta), 0, sin(cube2Theta)),
+                         vec3(0, 1, 0),
+                         vec3(-sin(cube2Theta), 0, cos(cube2Theta))
+                         );
+  float cube2Dist =  sdRoundBox((cube2Scale * p + cube2Translate) * cube2Rotation, vec3(0.55, 0.35, 0.38), 0.1);
+
+  vec3 cube3Translate = vec3(-5.0, -0.16, -0.3);
+  vec3 cube3Scale = vec3(1.0, 1.0, 1.0);
+
+  float cube3Theta = pi / 30.0;
+  mat3 cube3Rotation   = mat3(vec3(cos(cube3Theta), 0, sin(cube3Theta)),
+                         vec3(0, 1, 0),
+                         vec3(-sin(cube3Theta), 0, cos(cube3Theta))
+                         );
+  float cube3Dist =  sdRoundBox((cube3Scale * p + cube3Translate) * cube3Rotation, vec3(0.48, 0.32, 0.38), 0.08);
+
+  return opUnion(opUnion(cube1Dist, cube2Dist), cube3Dist);
+
+}
+vec3 getSugarCubeFlatNormal(vec3 p) {
+  return normalize(vec3(  sugarCubesFlatSDF(vec3(p[0] + 0.001, p[1], p[2])) - sugarCubesFlatSDF(vec3(p[0] - 0.001, p[1], p[2])),
+                          sugarCubesFlatSDF(vec3(p[0], p[1] + 0.001, p[2])) - sugarCubesFlatSDF(vec3(p[0], p[1] - 0.001, p[2])),
+                          sugarCubesFlatSDF(vec3(p[0], p[1], p[2] + 0.001)) - sugarCubesFlatSDF(vec3(p[0], p[1], p[2] - 0.001))
+                       ));
+}
+float sugarCubesSDF(vec3 p) {
+  // float sugarCubeBump = fbm3D(p.x, p.y, p.z, 0.05, 0.2, 0.2, 0.2);
+  // float sugarCubeBump = 0.08 * pow(computeWorley3D(p.x, p.y, p.z, 150.0, 150.0, 150.0), 0.3);
+  // p += sugarCubeBump * getSugarCubeFlatNormal(p);
+
+  vec3 cube1Translate = vec3(-5.95, 0.7, -0.9);
+  vec3 cube1Scale = vec3(1.0, 1.0, 1.0);
+
+  float cube1Theta = pi / 8.0;
+  mat3 cube1Rotation   = mat3(vec3(cos(cube1Theta), 0, sin(cube1Theta)),
+                         vec3(0, 1, 0),
+                         vec3(-sin(cube1Theta), 0, cos(cube1Theta))
+                         );
+  float cube1Dist =  sdRoundBox((cube1Scale * p + cube1Translate) * cube1Rotation, vec3(0.6, 0.35, 0.38), 0.1);
+
+  vec3 cube2Translate = vec3(-4.4, 0.7, -0.3);
+  vec3 cube2Scale = vec3(1.0, 1.0, 1.0);
+
+  float cube2Theta = -pi / 7.0;
+  mat3 cube2Rotation   = mat3(vec3(cos(cube2Theta), 0, sin(cube2Theta)),
+                         vec3(0, 1, 0),
+                         vec3(-sin(cube2Theta), 0, cos(cube2Theta))
+                         );
+  float cube2Dist =  sdRoundBox((cube2Scale * p + cube2Translate) * cube2Rotation, vec3(0.55, 0.35, 0.38), 0.1);
+
+  vec3 cube3Translate = vec3(-5.0, -0.16, -0.3);
+  vec3 cube3Scale = vec3(1.0, 1.0, 1.0);
+
+  float cube3Theta = pi / 30.0;
+  mat3 cube3Rotation   = mat3(vec3(cos(cube3Theta), 0, sin(cube3Theta)),
+                         vec3(0, 1, 0),
+                         vec3(-sin(cube3Theta), 0, cos(cube3Theta))
+                         );
+  float cube3Dist =  sdRoundBox((cube3Scale * p + cube3Translate) * cube3Rotation, vec3(0.48, 0.32, 0.38), 0.08);
+
+  return opUnion(opUnion(cube1Dist, cube2Dist), cube3Dist);
+
+}
+
+float spoonSDF(vec3 p) {
+  vec3 spoonTranslate = vec3(-0.75, 0.3, 2.5);
+  vec3 spoonPostTranslate = vec3(0.04, 0.0, 0.0);
+  vec3 spoonScale = vec3(0.25, 0.8, 0.3);
+  float spoonTheta = -pi / 6.0;
+  mat3 spoonRotationY = mat3(vec3(cos(spoonTheta), 0, sin(spoonTheta)),
+                             vec3(0, 1, 0),
+                             vec3(-sin(spoonTheta), 0, cos(spoonTheta))
+                            );
+  float spoonThetaZ = -pi / 9.0;
+  mat3 spoonRotationZ = mat3(vec3(cos(spoonThetaZ), sin(spoonThetaZ), 0),
+                           vec3(-sin(spoonThetaZ), cos(spoonThetaZ), 0),
+                           vec3(0, 0, 1)
+                           );
+  float spoonMainDist = sphereSDF( ((p + spoonTranslate) * spoonRotationY * spoonRotationZ * spoonScale) + spoonPostTranslate, 0.2);
+
+
+  vec3 spoonCutoutTranslate = vec3(-0.71, 0.18, 2.48);
+  vec3 spoonCutoutScale = vec3(0.25, 0.75, 0.3);
+  float spoonCutoutDist = sphereSDF( ((p + spoonCutoutTranslate) * spoonRotationY * spoonRotationZ * spoonCutoutScale) + spoonPostTranslate, 0.21);
+
+  spoonMainDist = opSmoothSubtraction(spoonCutoutDist, spoonMainDist, 0.05);
+
+  vec3 handleTranslate = vec3(-0.81, 0.42, 2.48);
+  vec3 handlePostTranslate = vec3(-1.2, -0.03, 0.02);
+  vec3 handleScale = vec3(0.45, 1.0, 0.3);
+
+  float handleThetaZ = -pi / 15.0;
+  mat3 handleRotationZ = mat3(vec3(cos(handleThetaZ), sin(handleThetaZ), 0),
+                           vec3(-sin(handleThetaZ), cos(handleThetaZ), 0),
+                           vec3(0, 0, 1)
+                           );
+  float handleDist = sphereSDF( (((p + handleTranslate) * spoonRotationY * handleRotationZ * handleScale)) + handlePostTranslate, 0.1);
+
+  vec3 connectPostTranslate = vec3(-0.9, 0.3, 0.0);
+  vec3 connectScale = vec3(1.0, 1.0, 1.0);
+  float connectThetaZ = pi / 40.0;
+  mat3 connectRotationZ = mat3(vec3(cos(connectThetaZ), sin(connectThetaZ), 0),
+                           vec3(-sin(connectThetaZ), cos(connectThetaZ), 0),
+                           vec3(0, 0, 1)
+                           );  
+  float connectDist = sdBox( (((p + spoonTranslate) * spoonRotationY * connectRotationZ * connectScale)) + connectPostTranslate, vec3(0.3, 0.02, 0.07));
+
+  vec3 connect2PostTranslate = vec3(-1.55, -0.1, 0.0);
+  vec3 connect2Scale = vec3(1.0, 1.0, 1.0);
+  float connect2ThetaZ = -pi / 13.0;
+  mat3 connect2RotationZ = mat3(vec3(cos(connect2ThetaZ), sin(connect2ThetaZ), 0),
+                           vec3(-sin(connect2ThetaZ), cos(connect2ThetaZ), 0),
+                           vec3(0, 0, 1)
+                           );  
+  float connect2Dist = sdBox( (((p + spoonTranslate) * spoonRotationY * connect2RotationZ * connect2Scale)) + connect2PostTranslate, vec3(0.3, 0.02, 0.07));
+  connectDist = opSmoothUnion(connectDist, connect2Dist, 0.1);
+
+
+
+  vec3 connect3PostTranslate = vec3(-2.15, -0.38, 0.0);
+  vec3 connect3Scale = vec3(1.0, 1.0, 1.0);
+  float connect3ThetaZ = -pi / 8.0;
+  mat3 connect3RotationZ = mat3(vec3(cos(connect3ThetaZ), sin(connect3ThetaZ), 0),
+                           vec3(-sin(connect3ThetaZ), cos(connect3ThetaZ), 0),
+                           vec3(0, 0, 1)
+                           );  
+  float connect3Dist = sdBox( (((p + spoonTranslate) * spoonRotationY * connect3RotationZ * connect3Scale)) + connect3PostTranslate, vec3(0.3, 0.02, 0.07));
+  connectDist = opSmoothUnion(connectDist, connect3Dist, 0.1);
+
+  float spoonDist = opSmoothUnion(opUnion(handleDist, opSmoothSubtraction(spoonCutoutDist, spoonMainDist, 0.05)), connectDist, 0.1);
+  // float spoonDist = opSmoothUnion(opSmoothSubtraction(spoonCutoutDist, spoonMainDist, 0.05), connectDist, 0.1);
+
+
+  return spoonDist;
 }
 
 vec3 getSugarCubeNormal(vec3 p) {
@@ -326,7 +504,10 @@ vec3 getSugarCubeNormal(vec3 p) {
                        ));
 }
 
+
+
 vec3 getTableNormal(vec3 p) {
+
   return normalize(vec3(  tableSDF(vec3(p[0] + 0.001, p[1], p[2])) - tableSDF(vec3(p[0] - 0.001, p[1], p[2])),
                           tableSDF(vec3(p[0], p[1] + 0.001, p[2])) - tableSDF(vec3(p[0], p[1] - 0.001, p[2])),
                           tableSDF(vec3(p[0], p[1], p[2] + 0.001)) - tableSDF(vec3(p[0], p[1], p[2] - 0.001))
@@ -339,6 +520,13 @@ vec3 getCupNormal(vec3 p) {
                           cupSDF(vec3(p[0], p[1], p[2] + 0.001)) - cupSDF(vec3(p[0], p[1], p[2] - 0.001))
                        ));
 }
+
+vec3 getSpoonNormal(vec3 p) {
+  return normalize(vec3(  spoonSDF(vec3(p[0] + 0.001, p[1], p[2])) - spoonSDF(vec3(p[0] - 0.001, p[1], p[2])),
+                          spoonSDF(vec3(p[0], p[1] + 0.001, p[2])) - spoonSDF(vec3(p[0], p[1] - 0.001, p[2])),
+                          spoonSDF(vec3(p[0], p[1], p[2] + 0.001)) - spoonSDF(vec3(p[0], p[1], p[2] - 0.001))
+                       ));
+}
 float sceneSDFnoMat(vec3 p) {
 
   // return sphereSDF(p, 2.0);
@@ -346,56 +534,60 @@ float sceneSDFnoMat(vec3 p) {
   float saucerDist = saucerSDF(p);
   float tableDist = tableSDF(p);
   float cupDist = cupSDF(p);
+  float sugarCubeDist = sugarCubesSDF(p);
+  float spoonDist = spoonSDF(p);
 
-  if (saucerDist < tableDist && saucerDist < cupDist) {
 
+  if (saucerDist < tableDist && saucerDist < cupDist && saucerDist < sugarCubeDist && saucerDist < spoonDist) {
     return saucerDist;
-  } else if (tableDist < cupDist){
-
+  } else if (tableDist < cupDist && tableDist < sugarCubeDist && tableDist < spoonDist){
     return tableDist;
-  } else {
-
+  } else if (cupDist < sugarCubeDist && cupDist < spoonDist) {
     return cupDist;
+  } else if (sugarCubeDist < spoonDist) {
+    return sugarCubeDist;
+  } else {
+    return spoonDist;
   }
 }
 
-// float softshadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k)
-// {
-//     float res = 1.0;
-//     for( float t=mint; t < maxt; )
-//     {
-//         float h = sceneSDFnoMat(ro + rd*t);
-//         if( h<.01 * epsilon )
-//             return 0.0;
-//         res = min( res, k*h/t );
-//         t += h;
-//     }
-//     return res;
-// }
-
-float softshadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k )
+float softshadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k)
 {
     float res = 1.0;
-    float ph = 1e20;
-    float counter = 0.0;
     for( float t=mint; t < maxt; )
     {
         float h = sceneSDFnoMat(ro + rd*t);
-        if( abs(h)< 0.1 * epsilon ) {
+        if( h<epsilon )
             return 0.0;
-        }
-        float y = h*h/(2.0*ph);
-        float d = sqrt(h*h-y*y);
-        res = min(res, k*d/max(0.0,t-y));
-        ph = h;
+        res = min( res, k*h/t );
         t += h;
-        counter ++;
-        if (counter > 50.0) {
-          return res;
-        }
     }
     return res;
 }
+
+// float softshadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k )
+// {
+//     float res = 1.0;
+//     float ph = 1e20;
+//     float counter = 0.0;
+//     for( float t=mint; t < maxt; )
+//     {
+//         float h = sceneSDFnoMat(ro + rd*t);
+//         if( abs(h)< 0.1 * epsilon ) {
+//             return 0.0;
+//         }
+//         float y = h*h/(2.0*ph);
+//         float d = sqrt(h*h-y*y);
+//         res = min(res, k*d/max(0.0,t-y));
+//         ph = h;
+//         t += h;
+//         counter ++;
+//         if (counter > 50.0) {
+//           return res;
+//         }
+//     }
+//     return res;
+// }
 
 
 vec4 ceramicMaterial(vec3 normal, vec3 point, vec3 dir) {
@@ -408,7 +600,7 @@ vec4 ceramicMaterial(vec3 normal, vec3 point, vec3 dir) {
     float ambientTerm = 0.2;
     float lightIntensity = diffuseTerm + ambientTerm;
     vec3 shadowPoint = point + epsilon * normalize((lightPosition - point));
-    // float shadowVal = softshadow(point, normalize(lightPosition - point), 0.07, 3.0, 32.0);
+    // float shadowVal = softshadow(point, normalize(lightPosition - point), 0.1, 3.0, 32.0);
     float shadowVal = 1.0;
     vec3 shadowColor = vec3(0.07, 0.1, 0.15);
     return vec4(shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm * reflectiveTerm * vec3(0.8, 0.6, 1.0)), diffuseColor.a);
@@ -416,11 +608,107 @@ vec4 ceramicMaterial(vec3 normal, vec3 point, vec3 dir) {
 
 }
 
+vec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d )
+{
+    return a + b*cos( 6.28318*(c*t+d) );
+}
+
+vec3 tableBaseColor(vec3 point) {
+  float zFreq = 0.9 + 0.08 * (sin(point.x / 5.0 + 2.0) + sin(point.x / 4.0 + 9.0) + cos(point.z / 3.0));
+  float tVal = 1.0 - fract(3.0 * fbm(point.x, point.z, 1.0, 9.0, zFreq));
+  float roughness = 0.2 + pow(fbm(point.x, point.z, 1.1, 1.0, 0.09), 1.1);
+  float lines = 1.0;
+  if (sin(point.z * 4.0) > 0.99) {
+    lines = 0.0;
+  }
+  return lines * roughness * 0.5 * palette(tVal, vec3(0.42,0.25,0.07),vec3(0.3,0.3,0.2),vec3(1.0,1.0,1.0),vec3(0.18,0.16,0.11) );
+}
+
+
 vec4 tableMaterial(vec3 normal, vec3 point, vec3 dir) {
+
+    vec3 lightPosition = vec3(2.0, 7.0, -3.0);
+    vec3 light2Position = vec3(-12.0, 10.0, -3.0);
+    vec3 light3Position = vec3(0.0, 10.0, 5.0);
+    vec3 light1Color = vec3(0.95, 0.9, 1.0);
+    vec3 light2Color = vec3(1.0, 0.9, 0.7);
+    vec3 light3Color = vec3(1.0, 1.0, 1.0);
+
+    vec4 diffuseColor = vec4(tableBaseColor(point), 1.0);
+    float diffuseTerm = 0.13 * dot(normalize(normal), normalize(lightPosition - point));
+    diffuseTerm += 0.13 * dot(normalize(normal), normalize(light2Position - point));
+    diffuseTerm += 0.13 * dot(normalize(normal), normalize(light3Position - point));
+
+    float ambientTerm = 0.2;
+
+    float shadowVal1 = softshadow(point, normalize(lightPosition - point), 0.2, 10.0, 42.0);
+    float shadowVal2 = softshadow(point, normalize(light2Position - point), 0.2, 10.0, 24.0);
+    float shadowVal3 = softshadow(point, normalize(light3Position - point), 0.2, 10.0, 42.0);
+
+        // float shadowVal = 1.0;    
+    float light1Intensity = 0.8 * shadowVal1;
+    float light2Intensity = 0.7 * shadowVal2;
+    float light3Intensity = 0.5 * shadowVal3;
+
+
+    vec3 baseColor = diffuseColor.rgb + diffuseTerm;
+    // basecolor * (light1.color * light1Intensity + light2.color * light2Intensity)
+    return vec4(baseColor * (light1Intensity * light1Color + light2Intensity * light2Color + light3Intensity * light3Color), diffuseColor.a);
+}
+
+float spoonSceneSDF(vec3 dir, vec3 p, out vec3 nor, out vec4 col) {
+  col = vec4(1.0, 0.0, 0.0, 1.0);
+
+  float saucerDist = saucerSDF(p);
+  float tableDist = tableSDF(p);
+  float cupDist = cupSDF(p);
+  float sugarCubeDist = sugarCubesSDF(p);
+
+  if (saucerDist < tableDist && saucerDist < cupDist && saucerDist < sugarCubeDist) {
+    nor = getSaucerNormal(p);
+    // col = ceramicMaterial(nor, p, dir);
+    col = vec4(1.0, 1.0, 0.0, 1.0);
+    return saucerDist;
+  } else if (tableDist < cupDist && tableDist < sugarCubeDist){
+    nor = getTableNormal(p);
+    // col = tableMaterial(nor, p, dir);
+    col = vec4(1.0, 0.0, 0.0, 1.0);
+    return tableDist;
+  } else if (cupDist < sugarCubeDist) {
+    nor = getCupNormal(p);
+    // col = ceramicMaterial(nor, p, dir);
+    col = vec4(1.0, 0.0, 1.0, 1.0);
+    return cupDist;
+  } else {
+    nor = getSugarCubeNormal(p);
+    // col = tableMaterial(nor, p, dir);
+    col = vec4(0.0, 1.0, 1.0, 1.0);
+    return sugarCubeDist;
+  }
+}
+
+vec4 getSpoonReflection(vec3 point, vec3 dir, float mint, float maxt) {
+  vec4 col = vec4(1.0);
+  vec3 nor = vec3(1.0);
+  for( float t=mint; t < maxt; ) {
+        float h = spoonSceneSDF(dir, point, nor, col);
+        if( h<0.5 ) {
+            return col;
+        }
+        t += h;
+    }
+  return vec4(0.7 * sin(200.0 * fs_Pos.x * point.y * point.z), 0.7, 0.8, 1.0);
+
+}
+
+vec4 spoonMaterial(vec3 normal, vec3 point, vec3 dir) {
   // normal.y += 0.8 * fbm3D(point.x, point.y, point.z, 3.0, 2.5, 2.5, 2.5);
   //   normal.x += 0.7* fbm3D(point.x + 2.0, point.y, point.z, 1.0, 3.0, 3.0, 3.0);
+    point += 0.8 * normal * computeWorley(point.x, point.z, 5.0, 5.0);
     vec3 lightPosition = vec3(3.0, 7.0, -3.0);
-    vec4 diffuseColor = vec4(0.95, 0.95, 0.9, 1.0);
+    // vec4 diffuseColor = vec4(0.15, 0.15, 0.3, 1.0);
+    vec3 reflectionNor = normalize(normal + 5.0 * vec3(sin(point.x), sin(point.y), sin(point.z)));
+    vec4 diffuseColor = getSpoonReflection(point, reflectionNor, 0.1, 10.0);
     float diffuseTerm = dot(normalize(normal), normalize(lightPosition - point));
     float ambientTerm = 0.2;
     float lightIntensity = diffuseTerm + ambientTerm;
@@ -429,7 +717,7 @@ vec4 tableMaterial(vec3 normal, vec3 point, vec3 dir) {
         float shadowVal = 1.0;
 
     vec3 shadowColor = vec3(0.07, 0.1, 0.15);
-    return vec4(shadowColor + shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm), diffuseColor.a);
+    return vec4(shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm), diffuseColor.a);
 }
 
 
@@ -441,28 +729,34 @@ float sceneSDF(vec3 dir, vec3 p, out vec3 nor, out vec4 col) {
   float saucerDist = saucerSDF(p);
   float tableDist = tableSDF(p);
   float cupDist = cupSDF(p);
+  float spoonDist = spoonSDF(p);
+
   float sugarCubeDist = sugarCubesSDF(p);
+
 
   // nor = getSphereNormal(p, 2.0);
   // col = ceramicMaterial(nor, p, dir);
   // return sphereSDF(p, 2.0);
-
-  if (saucerDist < tableDist && saucerDist < cupDist && saucerDist < sugarCubeDist) {
+  if (saucerDist < tableDist && saucerDist < cupDist && saucerDist < sugarCubeDist && saucerDist < spoonDist) {
     nor = getSaucerNormal(p);
     col = ceramicMaterial(nor, p, dir);
     return saucerDist;
-  } else if (tableDist < cupDist && tableDist < sugarCubeDist){
+  } else if (tableDist < cupDist && tableDist < sugarCubeDist && tableDist < spoonDist){
     nor = getTableNormal(p);
     col = tableMaterial(nor, p, dir);
     return tableDist;
-  } else if (cupDist < sugarCubeDist) {
+  } else if (cupDist < sugarCubeDist && cupDist < spoonDist) {
     nor = getCupNormal(p);
     col = ceramicMaterial(nor, p, dir);
     return cupDist;
-  } else {
+  } else if (sugarCubeDist < spoonDist) {
     nor = getSugarCubeNormal(p);
     col = tableMaterial(nor, p, dir);
     return sugarCubeDist;
+  } else {
+    nor = getSpoonNormal(p);
+    col = spoonMaterial(nor, p, dir);
+    return spoonDist;
   }
 }
 
@@ -487,7 +781,7 @@ bool rayMarch(vec3 dir, out vec3 nor, out vec4 col) {
         return true;
     }
     depth += dist;
-    if (depth > 50.0) {
+    if (depth > 30.0) {
       nor = vec3(0.0, 0.0, 0.0);
       return false;
     }
@@ -510,6 +804,7 @@ void main() {
     
     out_Col = vec4(diffuseColor.rgb * lightIntensity, diffuseColor.a);
   } else {
-    out_Col = vec4(0.5 * (castRay(u_Eye) + vec3(1.0, 1.0, 1.0)), 1.0);
+    // out_Col = vec4(0.5 * (castRay(u_Eye) + vec3(1.0, 1.0, 1.0)), 1.0);
+    out_Col = 0.3 * vec4(0.9 * sin(100.0 * fs_Pos.x), 0.7, 0.8, 1.0);
   }
 }
