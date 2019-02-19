@@ -10,6 +10,16 @@ out vec4 out_Col;
 
 const float epsilon = 0.01;
 const float pi = 3.1415926535;
+const float AO_DIST = 0.085;
+const float DISTORTION = 0.2;
+// The higher GLOW is, the smaller the glow of the subsurface scattering
+const float GLOW = 6.0;
+// The higher the BSSRDF_SCALE, the brighter the scattered light
+const float BSSRDF_SCALE = 3.0;
+// Boost the shadowed areas in the subsurface glow with this
+const float AMBIENT = 0.0;
+const float FIVETAP_K = 2.0;
+
 // Noise functions:
 float random1( vec2 p , vec2 seed) {
   return fract(sin(dot(p + seed, vec2(127.1, 311.7))) * 43758.5453);
@@ -388,7 +398,7 @@ vec3 getSugarCubeFlatNormal(vec3 p) {
 }
 float sugarCubesSDF(vec3 p) {
   // float sugarCubeBump = fbm3D(p.x, p.y, p.z, 0.05, 0.2, 0.2, 0.2);
-  // float sugarCubeBump = 0.08 * pow(computeWorley3D(p.x, p.y, p.z, 150.0, 150.0, 150.0), 0.3);
+  // float sugarCubeBump = 0.02 * pow(computeWorley3D(p.x, p.y, p.z, 50.0, 50.0, 200.0), 0.3);
   // p += sugarCubeBump * getSugarCubeFlatNormal(p);
 
   vec3 cube1Translate = vec3(-5.95, 0.7, -0.9);
@@ -589,6 +599,26 @@ float softshadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k)
 //     return res;
 // }
 
+float fiveTapAO(vec3 p, vec3 n, float k) {
+    float aoSum = 0.0;
+    for(float i = 0.0; i < 5.0; ++i) {
+        float coeff = 1.0 / pow(2.0, i);
+        aoSum += coeff * (i * AO_DIST - sceneSDFnoMat(p + n * i * AO_DIST));
+    }
+    return 1.0 - k * aoSum;
+}
+
+float subsurface(vec3 lightDir, vec3 normal, vec3 viewVec, float thickness) {
+    vec3 scatteredLightDir = lightDir + normal * DISTORTION;
+    float lightReachingEye = pow(clamp(dot(viewVec, -scatteredLightDir), 0.0, 1.0), GLOW) * BSSRDF_SCALE;
+    float attenuation = 1.0;
+    // #if ATTENUATION
+    // attenuation = max(0.0, dot(normal, lightDir) + dot(viewVec, -lightDir));
+    // #endif
+	float totalLight = attenuation * (lightReachingEye + AMBIENT) * thickness;
+    return totalLight;
+}
+
 
 vec4 ceramicMaterial(vec3 normal, vec3 point, vec3 dir) {
   float reflectiveTerm = 0.8 * pow(abs(dot(normalize(normal), normalize(dir))), 15.0);
@@ -603,7 +633,12 @@ vec4 ceramicMaterial(vec3 normal, vec3 point, vec3 dir) {
     // float shadowVal = softshadow(point, normalize(lightPosition - point), 0.1, 3.0, 32.0);
     float shadowVal = 1.0;
     vec3 shadowColor = vec3(0.07, 0.1, 0.15);
-    return vec4(shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm * reflectiveTerm * vec3(0.8, 0.6, 1.0)), diffuseColor.a);
+            float ao = fiveTapAO(point, normal, 4.0);
+
+
+
+
+    return vec4(ao * shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm * reflectiveTerm * vec3(0.8, 0.6, 1.0)), diffuseColor.a);
         // return vec4((1.0 - shadowVal) * shadowColor + shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm * reflectiveTerm * vec3(0.8, 0.6, 1.0)), diffuseColor.a);
 
 }
@@ -612,16 +647,42 @@ vec4 sugarMaterial(vec3 normal, vec3 point, vec3 dir) {
   float reflectiveTerm = 0.8 * pow(abs(dot(normalize(normal), normalize(dir))), 15.0);
   // normal.y += 0.8 * fbm3D(point.x, point.y, point.z, 3.0, 2.5, 2.5, 2.5);
   //   normal.x += 0.7* fbm3D(point.x + 2.0, point.y, point.z, 1.0, 3.0, 3.0, 3.0);
-    vec3 lightPosition = vec3(3.0, 7.0, -3.0);
-    vec4 diffuseColor = vec4(0.95, 0.95, 0.9, 1.0);
-    float diffuseTerm = dot(normalize(normal), normalize(lightPosition - point));
-    float ambientTerm = 0.2;
-    float lightIntensity = diffuseTerm + ambientTerm;
-    vec3 shadowPoint = point + epsilon * normalize((lightPosition - point));
-    // float shadowVal = softshadow(point, normalize(lightPosition - point), 0.1, 3.0, 32.0);
-    float shadowVal = 1.0;
-    vec3 shadowColor = vec3(0.07, 0.1, 0.15);
-    return vec4(shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm * reflectiveTerm * vec3(0.8, 0.6, 1.0)), diffuseColor.a);
+    vec3 lightPosition = vec3(2.0, 7.0, -3.0);
+    vec3 light2Position = vec3(-12.0, 10.0, -3.0);
+    vec3 light3Position = vec3(0.0, 10.0, 5.0);
+    vec3 light1Color = vec3(0.95, 0.9, 1.0);
+    vec3 light2Color = vec3(1.0, 0.9, 0.7);
+    vec3 light3Color = vec3(1.0, 1.0, 1.0);
+    
+    vec3 aoLightPosition = vec3(5.8, 0.0, 3.0);
+
+
+    vec3 baseAlbedo = vec3(0.95, 0.95, 1.0);
+    vec4 diffuseColor = vec4(baseAlbedo, 1.0);
+
+    float diffuseTerm = 0.13 * dot(normalize(normal), normalize(lightPosition - point));
+    diffuseTerm += 0.13 * dot(normalize(normal), normalize(light2Position - point));
+    diffuseTerm += 0.13 * dot(normalize(normal), normalize(light3Position - point));
+    
+    float shadowVal1 = softshadow(point, normalize(lightPosition - point), 0.2, 10.0, 12.0) + 0.1;
+    float shadowVal2 = softshadow(point, normalize(light2Position - point), 0.2, 10.0, 16.0) + 0.1;
+    float shadowVal3 = softshadow(point, normalize(light3Position - point), 0.2, 10.0, 44.0) + 0.1;
+   
+    float light1Intensity = 0.6 * shadowVal1;
+    float light2Intensity = 0.6 * shadowVal2;
+    float light3Intensity = 0.1 * shadowVal3;
+
+    // float light1Intensity = 0.6;
+    // float light2Intensity = 0.6;
+    // float light3Intensity = 0.1;
+    vec3 baseColor = diffuseColor.rgb + diffuseTerm;
+    float ao = fiveTapAO(point, normal, 5.0);
+    // float ao = 1.0;
+    float thickness = fiveTapAO(point, dir, 4.0 * FIVETAP_K);
+        // return color + vec3(1.0, 0.67, 0.67) * subsurface(light, n, view, thick) * vec3(1.0, 0.88, 0.7);
+    vec3 ss = vec3(1.0, 0.87, 0.87) * subsurface(point - aoLightPosition, normal, dir, thickness) * baseColor;
+
+    return vec4(0.4 * ss + ao * baseColor * (light1Intensity * light1Color + light2Intensity * light2Color + light3Intensity * light3Color), diffuseColor.a);
         // return vec4((1.0 - shadowVal) * shadowColor + shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm * reflectiveTerm * vec3(0.8, 0.6, 1.0)), diffuseColor.a);
 
 }
@@ -674,8 +735,9 @@ vec4 tableMaterial(vec3 normal, vec3 point, vec3 dir) {
     // float light3Intensity = 0.5;
 
     vec3 baseColor = diffuseColor.rgb + diffuseTerm;
+        float ao = fiveTapAO(point, normal, 5.0);
     // basecolor * (light1.color * light1Intensity + light2.color * light2Intensity)
-    return vec4(baseColor * (light1Intensity * light1Color + light2Intensity * light2Color + light3Intensity * light3Color), diffuseColor.a);
+    return vec4(ao * baseColor * (light1Intensity * light1Color + light2Intensity * light2Color + light3Intensity * light3Color), diffuseColor.a);
 }
 
 float spoonSceneSDF(vec3 dir, vec3 p, out vec3 nor, out vec4 col) {
@@ -721,6 +783,8 @@ vec4 getSpoonReflection(vec3 point, vec3 dir, float mint, float maxt) {
 
 }
 
+
+
 vec4 spoonMaterial(vec3 normal, vec3 point, vec3 dir) {
 
     vec3 lightPosition = vec3(2.0, 7.0, -3.0);
@@ -759,12 +823,15 @@ vec4 spoonMaterial(vec3 normal, vec3 point, vec3 dir) {
     diffuseColor += 0.7 * pow(reflectiveTerm, 3.0);
 
     vec4 reflectiveColor = getSpoonReflection(point, reflectiveDir, 0.2, 30.0);
+    // vec4 reflectiveColor = vec4(1.0, 1.0, 1.0, 1.0);
     diffuseColor = mix(reflectiveColor, diffuseColor, fresnelCoeff);
     // diffuseColor = reflectiveColor;
 
     vec3 baseColor = diffuseColor.rgb + diffuseTerm * reflectiveTerm;
     // basecolor * (light1.color * light1Intensity + light2.color * light2Intensity)
-    return vec4(baseColor * (light1Intensity * light1Color + light2Intensity * light2Color + light3Intensity * light3Color), diffuseColor.a);
+        float ao = fiveTapAO(point, normal, 5.0);
+
+    return vec4(ao * baseColor * (light1Intensity * light1Color + light2Intensity * light2Color + light3Intensity * light3Color), diffuseColor.a);
 }
 
 
@@ -821,7 +888,7 @@ bool rayMarch(vec3 dir, out vec3 nor, out vec4 col) {
   //   return false;
   // }
   // float shadowValue = 0.0;
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < 100; i++) {
     vec3 currPoint = u_Eye + depth * dir;
     vec3 normal;
     dist = sceneSDF(dir, currPoint, normal, col);
