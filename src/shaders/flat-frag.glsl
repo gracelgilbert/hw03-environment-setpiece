@@ -608,6 +608,24 @@ vec4 ceramicMaterial(vec3 normal, vec3 point, vec3 dir) {
 
 }
 
+vec4 sugarMaterial(vec3 normal, vec3 point, vec3 dir) {
+  float reflectiveTerm = 0.8 * pow(abs(dot(normalize(normal), normalize(dir))), 15.0);
+  // normal.y += 0.8 * fbm3D(point.x, point.y, point.z, 3.0, 2.5, 2.5, 2.5);
+  //   normal.x += 0.7* fbm3D(point.x + 2.0, point.y, point.z, 1.0, 3.0, 3.0, 3.0);
+    vec3 lightPosition = vec3(3.0, 7.0, -3.0);
+    vec4 diffuseColor = vec4(0.95, 0.95, 0.9, 1.0);
+    float diffuseTerm = dot(normalize(normal), normalize(lightPosition - point));
+    float ambientTerm = 0.2;
+    float lightIntensity = diffuseTerm + ambientTerm;
+    vec3 shadowPoint = point + epsilon * normalize((lightPosition - point));
+    // float shadowVal = softshadow(point, normalize(lightPosition - point), 0.1, 3.0, 32.0);
+    float shadowVal = 1.0;
+    vec3 shadowColor = vec3(0.07, 0.1, 0.15);
+    return vec4(shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm * reflectiveTerm * vec3(0.8, 0.6, 1.0)), diffuseColor.a);
+        // return vec4((1.0 - shadowVal) * shadowColor + shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm * reflectiveTerm * vec3(0.8, 0.6, 1.0)), diffuseColor.a);
+
+}
+
 vec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d )
 {
     return a + b*cos( 6.28318*(c*t+d) );
@@ -635,6 +653,86 @@ vec4 tableMaterial(vec3 normal, vec3 point, vec3 dir) {
     vec3 light3Color = vec3(1.0, 1.0, 1.0);
 
     vec4 diffuseColor = vec4(tableBaseColor(point), 1.0);
+    // vec4 diffuseColor = vec4(0.3, 0.2, 0.1, 1.0);
+    float diffuseTerm = 0.13 * dot(normalize(normal), normalize(lightPosition - point));
+    diffuseTerm += 0.13 * dot(normalize(normal), normalize(light2Position - point));
+    diffuseTerm += 0.13 * dot(normalize(normal), normalize(light3Position - point));
+
+    float ambientTerm = 0.2;
+
+    float shadowVal1 = softshadow(point, normalize(lightPosition - point), 0.2, 10.0, 42.0) + 0.1;
+    float shadowVal2 = softshadow(point, normalize(light2Position - point), 0.2, 10.0, 24.0) + 0.1;
+    float shadowVal3 = softshadow(point, normalize(light3Position - point), 0.2, 10.0, 42.0) + 0.1;
+
+        // float shadowVal = 1.0;    
+    float light1Intensity = 0.8 * shadowVal1;
+    float light2Intensity = 0.7 * shadowVal2;
+    float light3Intensity = 0.5 * shadowVal3;
+    
+    // float light1Intensity = 0.8;
+    // float light2Intensity = 0.7;
+    // float light3Intensity = 0.5;
+
+    vec3 baseColor = diffuseColor.rgb + diffuseTerm;
+    // basecolor * (light1.color * light1Intensity + light2.color * light2Intensity)
+    return vec4(baseColor * (light1Intensity * light1Color + light2Intensity * light2Color + light3Intensity * light3Color), diffuseColor.a);
+}
+
+float spoonSceneSDF(vec3 dir, vec3 p, out vec3 nor, out vec4 col) {
+  col = vec4(1.0, 0.0, 0.0, 1.0);
+
+  float light2Dist = sdBox(p - vec3(1.0, 0.5, -2.6 + 0.5 * sin(p.x * 2.0)), vec3(2.0, 1.0, 0.01));
+  float tableDist = tableSDF(p);
+  float light3Dist = sdBox(p - vec3(4.2, 0.5, -3.5), vec3(2.0, 1.0, 3.0));
+  float light1Dist = sdBox(p - vec3(3.2, 0.6, 0.2 + 0.1 * sin(p.x)), vec3(2.0, 1.0, 3.0));
+
+  if (light2Dist < tableDist && light2Dist < light3Dist && light2Dist < light1Dist) {
+    // nor = getSaucerNormal(p);
+    col = vec4(1.0, 1.0, 1.0, 1.0);
+    // col = vec4(1.0, 1.0, 0.0, 1.0);
+    return light2Dist;
+  } else if (tableDist < light3Dist && tableDist < light1Dist){
+    nor = getTableNormal(p);
+    col = tableMaterial(nor, p, dir);
+    // col = vec4(1.0, 0.0, 0.0, 1.0);
+    return tableDist;
+  } else if (light3Dist < light1Dist) {
+    // nor = getCupNormal(p);
+    // col = ceramicMaterial(nor, p, dir);
+    col = vec4(1.0, 1.0, 1.0, 1.0);
+    return light3Dist;
+  } else {
+    col = vec4(0.9, 0.9, 0.9, 1.0);
+    return light1Dist;
+  }
+}
+
+vec4 getSpoonReflection(vec3 point, vec3 dir, float mint, float maxt) {
+  vec4 col = vec4(1.0);
+  vec3 nor = vec3(1.0);
+  for( float t=mint; t < maxt; ) {
+        float h = spoonSceneSDF(dir, point, nor, col);
+        if( h<0.2 ) {
+            return col;
+        }
+        t += h;
+    }
+  return vec4(0.0, 0.0, 0.0, 1.0);
+
+}
+
+vec4 spoonMaterial(vec3 normal, vec3 point, vec3 dir) {
+
+    vec3 lightPosition = vec3(2.0, 7.0, -3.0);
+    vec3 light2Position = vec3(-12.0, 10.0, -3.0);
+    vec3 light3Position = vec3(0.0, 10.0, 5.0);
+    vec3 light1Color = vec3(0.95, 0.9, 1.0);
+    vec3 light2Color = vec3(1.0, 0.9, 0.7);
+    vec3 light3Color = vec3(1.0, 1.0, 1.0);
+
+
+    vec3 baseAlbedo = vec3(0.03, 0.06, 0.02);
+    vec4 diffuseColor = vec4(baseAlbedo, 1.0);
     float diffuseTerm = 0.13 * dot(normalize(normal), normalize(lightPosition - point));
     diffuseTerm += 0.13 * dot(normalize(normal), normalize(light2Position - point));
     diffuseTerm += 0.13 * dot(normalize(normal), normalize(light3Position - point));
@@ -650,74 +748,23 @@ vec4 tableMaterial(vec3 normal, vec3 point, vec3 dir) {
     float light2Intensity = 0.7 * shadowVal2;
     float light3Intensity = 0.5 * shadowVal3;
 
+    vec3 reflectiveDir = reflect(dir, normal);
 
-    vec3 baseColor = diffuseColor.rgb + diffuseTerm;
+    float fresnelCoeff = 1.0 - 0.5 * pow(abs(dot(normalize(normal), normalize(dir))), 5.0);
+
+    float reflectiveTerm = 0.1 * pow(abs(dot(normalize(normal), normalize(point - lightPosition))), 20.0);
+    reflectiveTerm += 1.0 * pow((abs(dot(normalize(normal), normalize(point - light2Position)))), 1.5);
+    reflectiveTerm += 0.5 * pow(abs(dot(normalize(normal), normalize(point - light3Position))), 1.2);
+
+    diffuseColor += 0.7 * pow(reflectiveTerm, 3.0);
+
+    vec4 reflectiveColor = getSpoonReflection(point, reflectiveDir, 0.2, 30.0);
+    diffuseColor = mix(reflectiveColor, diffuseColor, fresnelCoeff);
+    // diffuseColor = reflectiveColor;
+
+    vec3 baseColor = diffuseColor.rgb + diffuseTerm * reflectiveTerm;
     // basecolor * (light1.color * light1Intensity + light2.color * light2Intensity)
     return vec4(baseColor * (light1Intensity * light1Color + light2Intensity * light2Color + light3Intensity * light3Color), diffuseColor.a);
-}
-
-float spoonSceneSDF(vec3 dir, vec3 p, out vec3 nor, out vec4 col) {
-  col = vec4(1.0, 0.0, 0.0, 1.0);
-
-  float saucerDist = saucerSDF(p);
-  float tableDist = tableSDF(p);
-  float cupDist = cupSDF(p);
-  float sugarCubeDist = sugarCubesSDF(p);
-
-  if (saucerDist < tableDist && saucerDist < cupDist && saucerDist < sugarCubeDist) {
-    nor = getSaucerNormal(p);
-    // col = ceramicMaterial(nor, p, dir);
-    col = vec4(1.0, 1.0, 0.0, 1.0);
-    return saucerDist;
-  } else if (tableDist < cupDist && tableDist < sugarCubeDist){
-    nor = getTableNormal(p);
-    // col = tableMaterial(nor, p, dir);
-    col = vec4(1.0, 0.0, 0.0, 1.0);
-    return tableDist;
-  } else if (cupDist < sugarCubeDist) {
-    nor = getCupNormal(p);
-    // col = ceramicMaterial(nor, p, dir);
-    col = vec4(1.0, 0.0, 1.0, 1.0);
-    return cupDist;
-  } else {
-    nor = getSugarCubeNormal(p);
-    // col = tableMaterial(nor, p, dir);
-    col = vec4(0.0, 1.0, 1.0, 1.0);
-    return sugarCubeDist;
-  }
-}
-
-vec4 getSpoonReflection(vec3 point, vec3 dir, float mint, float maxt) {
-  vec4 col = vec4(1.0);
-  vec3 nor = vec3(1.0);
-  for( float t=mint; t < maxt; ) {
-        float h = spoonSceneSDF(dir, point, nor, col);
-        if( h<0.5 ) {
-            return col;
-        }
-        t += h;
-    }
-  return vec4(0.7 * sin(200.0 * fs_Pos.x * point.y * point.z), 0.7, 0.8, 1.0);
-
-}
-
-vec4 spoonMaterial(vec3 normal, vec3 point, vec3 dir) {
-  // normal.y += 0.8 * fbm3D(point.x, point.y, point.z, 3.0, 2.5, 2.5, 2.5);
-  //   normal.x += 0.7* fbm3D(point.x + 2.0, point.y, point.z, 1.0, 3.0, 3.0, 3.0);
-    point += 0.8 * normal * computeWorley(point.x, point.z, 5.0, 5.0);
-    vec3 lightPosition = vec3(3.0, 7.0, -3.0);
-    // vec4 diffuseColor = vec4(0.15, 0.15, 0.3, 1.0);
-    vec3 reflectionNor = normalize(normal + 5.0 * vec3(sin(point.x), sin(point.y), sin(point.z)));
-    vec4 diffuseColor = getSpoonReflection(point, reflectionNor, 0.1, 10.0);
-    float diffuseTerm = dot(normalize(normal), normalize(lightPosition - point));
-    float ambientTerm = 0.2;
-    float lightIntensity = diffuseTerm + ambientTerm;
-    vec3 shadowPoint = point + epsilon * normalize((lightPosition - point));
-    // float shadowVal = softshadow(point, normalize(lightPosition - point), 0.1, 10.0, 32.0);
-        float shadowVal = 1.0;
-
-    vec3 shadowColor = vec3(0.07, 0.1, 0.15);
-    return vec4(shadowVal * (diffuseColor.rgb * lightIntensity + diffuseTerm), diffuseColor.a);
 }
 
 
@@ -732,6 +779,8 @@ float sceneSDF(vec3 dir, vec3 p, out vec3 nor, out vec4 col) {
   float spoonDist = spoonSDF(p);
 
   float sugarCubeDist = sugarCubesSDF(p);
+  // float lightDist = sdBox(p - vec3(0.0, 2.0, 1.0), vec3(3.0, 1.0, 2.0));
+  // spoonDist = lightDist;
 
 
   // nor = getSphereNormal(p, 2.0);
@@ -751,7 +800,7 @@ float sceneSDF(vec3 dir, vec3 p, out vec3 nor, out vec4 col) {
     return cupDist;
   } else if (sugarCubeDist < spoonDist) {
     nor = getSugarCubeNormal(p);
-    col = tableMaterial(nor, p, dir);
+    col = sugarMaterial(nor, p, dir);
     return sugarCubeDist;
   } else {
     nor = getSpoonNormal(p);
