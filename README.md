@@ -50,6 +50,9 @@ The base texture of the sugar uses lambertian shading. In addition to the lamber
 
 With more time, I would like to focus on the base material of the sugar cubes.  Rather than having them be simple lambertian, would maybe add some specularity and texture. 
 #### Metal
+The spoon metal material is made up of a specular reflective material and a blinn phong specular material. The specular reflection color is found by performing a second ray bounce off of the spoon. This ray originates at the intersection of the camera ray with the spoon.  The bounce direction is the reflection direction of the camera ray with the normal of the spoon. I then calculate what this reflection ray hits in the scene with a separate scene SDF function. This SDF function only takes into account the table, as the spoon reflection does not hit other geometry in the scene.  I also added three subtly colored bright shapes surrounding the spoon to create more interesting reflections and colors in the spoon. Even though there is not much in the scene for the spoon to reflect, adding the extra geometry makes it look like there is a little more in the scene around the spoon to reflect.
+
+The seondary material of the spoon is a basic specular material using blinn phong shading. I raised the specular highlight value to a power of 3, which I found made the highlights sharp and bright enough to look shiny, but to still have a little bit of roughness. I combine this specular material with the reflective color using a fresnel coefficient approximation, increasing the reflection strength based on the angle between the normal of the object and the ray direction from the camera. 
 #### porcelain
 #### Wall
 
