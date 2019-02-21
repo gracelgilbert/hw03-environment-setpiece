@@ -972,10 +972,10 @@ void main() {
 
   float vignette = pow(1.0 - pow((x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5), 0.5), 0.5);
 
-  float steamX = 0.67 + 0.006 * sin(u_Time / 3.0 + 10.0 * y) + 0.005 * cos(u_Time / 3.0 + 8.0 * y + 1.0);
+  float steamX = 0.67 + 0.006 * sin(u_Time / 3.0 + 10.0 * y) + 0.005 * cos(u_Time / 3.0 + 8.0 * y + 1.0) + 0.01 * fbm(x, y, 1.0, 0.1, 0.1);
   float steamVal = clamp(pow(abs(x - steamX), 0.09) + 0.35, 0.0, 1.0);
 
-  float steamX2 = 0.67 + 0.01 * sin(u_Time / 3.0 + 13.0 * y) + 0.01 * cos(u_Time / 3.0  + 8.0 * y + 2.0);
+  float steamX2 = 0.67 + 0.01 * sin(u_Time / 3.0 + 13.0 * y) + 0.01 * cos(u_Time / 3.0  + 8.0 * y + 2.0) + 0.008 * fbm(x, y, 1.0, 0.1, 0.1);
   float steamVal2 = clamp(pow(abs(x - steamX2), 0.09) + 0.3, 0.0, 1.0);
 
   if (y < 0.635 || x < 0.64 || x > 0.71) {
