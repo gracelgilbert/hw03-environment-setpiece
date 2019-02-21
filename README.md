@@ -20,7 +20,7 @@ The base geometry of the sugar cubes is an SDF rounded box with a rounding param
 
 __0.04 * pow(computeWorley3D(p.x, p.y, p.z, 200.0, 200.0, 200.0), 0.3)__
 #### Teacup and Saucer
-- The teacup is a combination of SDF capped cones, SDF spheres, and SDF tori. The base of the cup consists of a capped cone with a wider base than top. Right above the cone is a sphere, which is flattened a little in the y direction. A box is subtracted from the sphere to cut it off at a certain height. The main cup shape is one capped cone subtracted from a slightly larger one, creating a conical shape that is slightly wider on the top, with an opening in the center. Subtracted from the cup shape is a large torus. This subtraction creates a curved shape of the cup. The radius of the torus ring is large to make the curve of the cup more subtle.
+- The teacup is a combination of SDF capped cones, SDF spheres, and SDF tori. The base of the cup consists of a capped cone with a wider base than top. Right above the cone is a sphere, which is flattened a little in the y direction. A box is subtracted from the sphere to cut it off at a certain height. The main cup shape is one capped cone subtracted from a slightly larger one, creating a conical shape that is slightly wider on the top, with an opening in the center. Subtracted from the cup shape is a large torus. This subtraction creates a curved shape of the cup. The radius of the torus ring is large to make the curve of the cup more subtle. In the future, I might like to add a handle to the teacup using a spiral function to create a shape somewhat like the handle in the reference painting.
 - The saucer is made of of SDF cones and tori. Base of the plate is a capped cone with a wider base than top.  The plate itself is wider cone with a smaller cone subtracted from it, to give a hollow conical shape with a flat spherical base. A thin torus wraps around the edge of the plate and is smooth blended to the cones to give a rounded rim to the plate. 
 #### Spoon
 The spoon consists of multiple SDFS blended together.  The scoop part of the spoons is made of an SDF sphere that is elongated in the x direction and flattened in the y direction. A second sphere a little bit above the first is smooth subtracted from the first sphere to create the hollowed out shape. The second sphere is also translated a little bit forward in the x direction to make the tip of the scoop thinner than the back of the scoop. The handle of the spoon is made up of 3 SDF boxes. The boxes are scaled to be very thin and narrow, and they are placed and rotated to create a curved handle. The boxes overlap a little and are smooth unioned together, creating a little bump where they meet that looks like the metal was welded together. Finally, a flattened sphere is smooth unioned onto the end of the handle to creat the endcap of the spoon. 
@@ -37,11 +37,18 @@ I then map this greyscale value to a cosine palette that consists of dark browns
 
 Layered on top of the wood grain pattern is a more dense FBM pattern stretched along x to give the texture finer detail and make the wood look a little rougher and more natural.
 
+Finally, I added thin, evenly spaced, straight horizontol lines to give a subtle effect of having individual panels of wood. I used a sin curve that took in the z value to place these lines.
+
+As a possible improvement, I would like to add normal mapping to make the wood texture look 3-dimensional. I would also like to try adding a little specularity to give the wood a little bit of shine.
+
 The following image shows the woodgrain pattern before mixed with the solid brown color:
 
 ![](scene.png)
 
 #### Sugar
+The base texture of the sugar uses lambertian shading. In addition to the lambertian shading, I added a subsurface scattering effect. To get this effect, I added a light behind the sugarCubes. When a ray hits the sugar cube, it calculates the scattered ray direction based on the light position. This value is scaled by a thinness parameter, which is calculated using a inward pointing ambient occlusion pass, finding how much of the object exists along the intersection ray direction. This ambient occlusion term calculates the thinness of the object from the camera perspective, and scales the subsurface value up the thinner the surface.  The subsurface value makes the sugar cubes look a little more translucent, giving them a more realistic feel.
+
+With more time, I would like to focus on the base material of the sugar cubes.  Rather than having them be simple lambertian, would maybe add some specularity and texture. 
 #### Metal
 #### porcelain
 #### Wall
