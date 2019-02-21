@@ -1,6 +1,6 @@
 # CIS 566 Homework 3: Environment Setpiece
 [https://gracelgilbert.github.io/hw03-environment-setpiece/]
-![](scene.png)
+![](sceneFinal.png)
 ![](3056592-VFMZOWIY-7.jpg)
 ## Objective
 - Apply your knowledge of noise functions, raymarching, SDFs, lighting,
