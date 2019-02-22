@@ -1,7 +1,7 @@
 # Grace Gilbert (gracegi), Environment Setpiece
 ## Demo Link
 https://gracelgilbert.github.io/hw03-environment-setpiece/
-![](teacupFinal.png)
+![](teacup.png)
 ## Inspiration
 ![](3056592-VFMZOWIY-7.jpg)
 
@@ -71,7 +71,7 @@ I also added ambient occlusion to some of the geometry. The sugar cubes are shad
 
 ### Post Process Elements
 #### Steam
-I added animated steam coming from the teacup as a screenspace overlay. I set a certain x position for a line of steam, and using two sin offset curves that are functions of the y value and time, animated that line. In addition to the sin curves, I added an FBM offset to the line to make it look less sinusoidal. I cut off this line at the height of the front lip of the teacup. I then found the horizontal distance from this animated line, and scaled the scene color based on this distance such that pixels near the line got shaded darker than pixels farther from the line. I did this twice, with two lines animated separately. This created an effect that looked like steam rising from the cup.
+I added animated steam coming from the teacup as a screenspace overlay. I set a certain x position for a line of steam, and using two sin offset curves that are functions of the y value and time, animated that line. In addition to the sin curves, I added an FBM offset to the line to make it look less sinusoidal. I cut off this line at the height of the front lip of the teacup. I then found the horizontal distance from this animated line, and scaled the scene color based on this distance such that pixels near the line got shaded whiter than pixels farther from the line. I did this twice, with two lines animated separately. This created an effect that looked like steam rising from the cup.
 
 Something I would want to improve is make it that this line of steam always lines up with the teacup.  Right now, because the steam is created in screen space, if the dimensions of the screen change, the line will no longer be right above the teacup, and it may not align with front lip of the cup. To fix this, I could possibly create a plane that lies in world space just above the teacup and is angled to always face the camera.  I can then apply a transparency map texture to that plane so that the entire plane is tranparent except for the animated lines of steam.
 #### Vignette
