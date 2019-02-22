@@ -693,7 +693,7 @@ vec4 sugarMaterial(vec3 normal, vec3 point, vec3 dir) {
     diffuseTerm += 0.25 * dot(normalize(normal), normalize(light2Position - point));
     diffuseTerm += 0.25 * dot(normalize(normal), normalize(light3Position - point));
     
-    float ambientTerm = 0.2;
+    float ambientTerm = 0.4;
 
     float shadowVal1 = softshadow(point, normalize(lightPosition - point), 0.15, 4.0, 4.0) + ambientTerm;
     float shadowVal2 = softshadow(point, normalize(light2Position - point), 0.15, 4.0, 4.0) + ambientTerm;
@@ -972,10 +972,10 @@ void main() {
 
   float vignette = pow(1.0 - pow((x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5), 0.5), 0.5);
 
-  float steamX = 0.67 + 0.006 * sin(u_Time / 3.0 + 10.0 * y) + 0.005 * cos(u_Time / 3.0 + 8.0 * y + 1.0) + 0.01 * fbm(x, y, 1.0, 0.1, 0.1);
+  float steamX = 0.67 + 0.006 * sin(u_Time / 3.0 + 10.0 * y) + 0.005 * cos(u_Time / 3.0 + 8.0 * y + 1.0) + 0.01 * fbm(x, y, 1.0, 0.2, 0.2);
   float steamVal = clamp(pow(abs(x - steamX), 0.09) + 0.35, 0.0, 1.0);
 
-  float steamX2 = 0.67 + 0.01 * sin(u_Time / 3.0 + 13.0 * y) + 0.01 * cos(u_Time / 3.0  + 8.0 * y + 2.0) + 0.008 * fbm(x, y, 1.0, 0.1, 0.1);
+  float steamX2 = 0.67 + 0.01 * sin(u_Time / 3.0 + 13.0 * y) + 0.01 * cos(u_Time / 3.0  + 8.0 * y + 2.0) + 0.008 * fbm(x, y, 1.0, 0.2, 0.2);
   float steamVal2 = clamp(pow(abs(x - steamX2), 0.09) + 0.3, 0.0, 1.0);
 
   if (y < 0.635 || x < 0.64 || x > 0.71) {
@@ -997,6 +997,6 @@ void main() {
     out_Col = vec4(steamVal * steamVal2 * vignette * diffuseColor.rgb * lightIntensity, diffuseColor.a);
   } else {
     // out_Col = vec4(0.5 * (castRay(u_Eye) + vec3(1.0, 1.0, 1.0)), 1.0);
-    out_Col = vec4(steamVal * steamVal2 * vignette * backgroundColor(fs_Pos.x, fs_Pos.y), 1.0);
+    out_Col = vec4((1.0 / steamVal) * (1.0 / steamVal2) * vignette * backgroundColor(fs_Pos.x, fs_Pos.y), 1.0);
   }
 }
